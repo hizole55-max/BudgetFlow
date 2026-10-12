@@ -55,4 +55,36 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 .pay-budget-list{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px}.pay-budget-item{border:1px solid var(--line);background:#fbfcfe;border-radius:12px;padding:12px;min-width:0}.pay-budget-item span{display:block;color:var(--muted);font-size:11px}.pay-budget-item strong{display:block;margin-top:6px;font-size:14px;overflow-wrap:anywhere}.pay-budget-top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.pay-budget-top select{border:1px solid #dfe5ed;border-radius:10px;padding:9px 10px;background:#fff;color:var(--ink);font:inherit;font-size:12px;max-width:100%}
 </style><script>
 (()=>{'use strict';const KEY='budgetflow-v1',FREQ='budgetflow-pay-frequency';const $=id=>document.getElementById(id);const fmt=n=>new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP',maximumFractionDigits:2}).format(Number(n)||0);const labels={expense:'Expenses',savings:'Savings',investment:'Investments',debt:'Debt repayment',free:'Free to spend'};function frequency(){return localStorage.getItem(FREQ)||'twice'}function monthPlan(){let d={income:70000,expense:25000,savings:10000,investment:5000,debt:20000,free:10000,transactions:[],plans:{}};try{const saved=JSON.parse(localStorage.getItem(KEY)||'{}');const m=$('monthSelect')?.value||new Date().getFullYear()+'-'+String(new Date().getMonth()+1).padStart(2,'0');d={...d,...saved};const p={income:d.income,...d.budgets,...(d.plans?.[m]||{})};return {p,transactions:(d.transactions||[]).filter(t=>t.date?.slice(0,7)===m)}}catch(e){return {p:d,transactions:[]}}}function renderPayBudget(){const host=$('payBudgetCard');if(!host)return;const {p,transactions}=monthPlan();const incomeTx=transactions.filter(t=>t.type==='income');const monthlyIncome=incomeTx.length?incomeTx.reduce((s,t)=>s+Math.max(0,Number(t.amount)||0),0):Math.max(0,Number(p.income)||0);const divisor=frequency()==='twice'?2:1;host.innerHTML=`<div class="pay-budget-top"><div><h3 style="font-size:15px;margin:0">Budget per paycheck</h3><p class="hint" style="margin:5px 0 0">Monthly budget split based on your selected pay frequency.</p></div><select id="overviewPayFrequency" aria-label="Pay frequency"><option value="monthly">Monthly</option><option value="twice">Twice monthly</option></select></div><div class="pay-budget-list"><div class="pay-budget-item"><span>Take-home income</span><strong>${fmt(monthlyIncome/divisor)}</strong></div>${Object.keys(labels).map(k=>`<div class="pay-budget-item"><span>${labels[k]}</span><strong>${fmt((Number(p[k])||0)/divisor)}</strong></div>`).join('')}</div><p class="hint" style="margin:12px 0 0">${frequency()==='twice'?'Amounts shown are estimates for each of 2 paychecks per month.':'Amounts shown are for one monthly paycheck.'} Monthly totals remain unchanged.</p>`;const select=$('overviewPayFrequency');select.value=frequency();select.onchange=()=>{localStorage.setItem(FREQ,select.value);const setup=$('payFrequency');if(setup)setup.value=select.value;renderPayBudget();if(setup)setup.dispatchEvent(new Event('change'))}}function initPayBudget(){const cards=$('budgetCards');if(!cards||$('payBudgetCard'))return;const section=document.createElement('div');section.className='section-head';section.innerHTML='<div><h2>Pay frequency budget</h2><p>See how much to set aside from each paycheck.</p></div>';const card=document.createElement('div');card.id='payBudgetCard';card.className='card';cards.insertAdjacentElement('afterend',section);section.insertAdjacentElement('afterend',card);const month=$('monthSelect');if(month)month.addEventListener('change',renderPayBudget);const form=$('budgetForm');if(form)form.addEventListener('submit',()=>setTimeout(renderPayBudget,0));const setup=$('payFrequency');if(setup){setup.value=frequency();setup.addEventListener('change',()=>{localStorage.setItem(FREQ,setup.value);renderPayBudget()})}renderPayBudget()}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initPayBudget);else initPayBudget();})();
+</script><style>
+/* Keep debt details aligned across desktop and mobile layouts. */
+.debt-numbers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;gap:12px}
+.debt-numbers>div{min-width:0;overflow-wrap:anywhere}
+.debt-numbers strong{font-size:clamp(12px,2.8vw,14px);overflow-wrap:anywhere}
+@media(max-width:420px){.debt-numbers{grid-template-columns:1fr 1fr}.debt-numbers>div:last-child{grid-column:1/-1}}
+</style><script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id);
+function syncDebtPicker(){
+ const type=$('txnType'),wrap=$('debtPickWrap'),select=$('txnDebt');
+ if(!type||!wrap||!select)return;
+ const isDebt=type.value==='debt';
+ wrap.classList.toggle('hidden',!isDebt);
+ const selected=select.value;
+ let debts=[];
+ try{const saved=JSON.parse(localStorage.getItem('budgetflow-v1')||'{}');debts=Array.isArray(saved.debts)?saved.debts:[]}catch(e){}
+ select.innerHTML='<option value="">No specific debt</option>'+debts.map(d=>`<option value="${String(d.id).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}">${String(d.name||'Unnamed debt').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}</option>`).join('');
+ if(debts.some(d=>String(d.id)===selected))select.value=selected;
+ const label=wrap.querySelector('label');if(label)label.textContent='Debt / credit card (optional)';
+ const hint=wrap.querySelector('.hint');if(hint)hint.remove();
+}
+function initDebtPicker(){
+ if(!$('txnType'))return;
+ $('txnType').addEventListener('change',syncDebtPicker);
+ $('txnSubcategory')?.addEventListener('change',syncDebtPicker);
+ const modal=$('txnModal');
+ if(modal)new MutationObserver(()=>{if(modal.classList.contains('open'))syncDebtPicker()}).observe(modal,{attributes:true,attributeFilter:['class']});
+ syncDebtPicker();
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initDebtPicker);else initDebtPicker();
+})();
 </script></body></html>
